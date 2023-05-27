@@ -17,6 +17,9 @@
 /*
 *   FUNCTION PROTOTYPES
 */
-extern int ctags_cli_main (int argc, char **argv);
+int ctags_cli_main (int argc, char **argv);
+
+__declspec(dllexport) char* ctags_cli_lib (int argc, char **argv);
+__declspec(dllexport) void ctags_cli_lib_free(char* str);
 
 #endif  /* CTAGS_MAIN_MAIN_PRIVATE_H */

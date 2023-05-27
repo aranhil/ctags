@@ -190,41 +190,62 @@ static int compareTags (const void *const one, const void *const two)
 	return strcmp (line1, line2);
 }
 
-static void writeSortedTags (
+static char* writeSortedTags (
 		char **const table, const size_t numTags, const bool toStdout, bool newlineReplaced)
 {
-	MIO *mio;
+	MIO* mio;
 	size_t i;
+	char* buffer = NULL;
+	size_t bufferSize = 0;
 
 	/*  Write the sorted lines back into the tag file.
 	 */
 	if (toStdout)
-		mio = mio_new_fp (stdout, NULL);
-	else
-	{
-		mio = mio_new_file (tagFileName (), "w");
+		mio = mio_new_fp(stdout, NULL);
+	else {
+		mio = mio_new_file(tagFileName(), "w");
 		if (mio == NULL)
-			failedSort (mio, NULL);
+			failedSort(mio, NULL);
 	}
-	for (i = 0 ; i < numTags ; ++i)
-	{
+	for (i = 0; i < numTags; ++i) {
 		/*  Here we filter out identical tag *lines* (including search
 		 *  pattern) if this is not an xref file.
 		 */
-		if (i == 0  ||  Option.xref  ||  strcmp (table [i], table [i-1]) != 0)
-		{
-			if (mio_puts (mio, table [i]) == EOF)
-				failedSort (mio, NULL);
-			else if (newlineReplaced)
-				mio_putc (mio, '\n');
+		if (i == 0 || Option.xref || strcmp(table[i], table[i - 1]) != 0) {
+
+			//if (mio_puts(mio, table[i]) == EOF)
+			//	failedSort(mio, NULL);
+			//else if (newlineReplaced)
+			//	mio_putc(mio, '\n');
+
+			// Allocate or resize the buffer as needed
+			size_t lineLength = strlen(table[i]);
+			size_t newBufferSize = bufferSize + lineLength + 1;
+			char* newBuffer = realloc(buffer, newBufferSize);
+			if (newBuffer == NULL) {
+				fprintf(stderr, "Failed to allocate memory\n");
+				exit(EXIT_FAILURE);
+			}
+			buffer = newBuffer;
+
+			// Copy the line into the buffer
+			strcpy(buffer + bufferSize, table[i]);
+			bufferSize += lineLength;
+			buffer[bufferSize] = '\n';
+			bufferSize++;
 		}
 	}
 	if (toStdout)
-		mio_flush (mio);
-	mio_unref (mio);
+		mio_flush(mio);
+	mio_unref(mio);
+
+	buffer[bufferSize] = '\0';
+	bufferSize++;
+
+	return buffer;
 }
 
-extern void internalSortTags (const bool toStdout, MIO* mio, size_t numTags)
+extern char* internalSortTags (const bool toStdout, MIO* mio, size_t numTags)
 {
 	vString *vLine = vStringNew ();
 	const char *line;
@@ -278,12 +299,14 @@ extern void internalSortTags (const bool toStdout, MIO* mio, size_t numTags)
 	 */
 	qsort (table, numTags, sizeof (*table), cmpFunc);
 
-	writeSortedTags (table, numTags, toStdout, newlineReplaced);
+	char* output = writeSortedTags (table, numTags, toStdout, newlineReplaced);
 
 	PrintStatus (("sort memory: %ld bytes\n", (long) mallocSize));
 	for (i = 0 ; i < numTags ; ++i)
 		free (table [i]);
 	free (table);
+
+	return output;
 }
 
 #endif

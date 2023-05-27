@@ -84,6 +84,11 @@ static void *mainData;
 */
 static bool createTagsForEntry (const char *const entryName);
 
+void ctags_cli_lib_free(char* str)
+{
+    free(str);
+}
+
 /*
 *   FUNCTION DEFINITIONS
 */
@@ -327,12 +332,12 @@ extern void setMainLoop (mainLoopFunc func, void *data)
 	mainData = data;
 }
 
-static void runMainLoop (cookedArgs *args)
+static char* runMainLoop (cookedArgs *args)
 {
-	(* mainLoop) (args, mainData);
+	return (* mainLoop) (args, mainData);
 }
 
-static void batchMakeTags (cookedArgs *args, void *user CTAGS_ATTR_UNUSED)
+static char* batchMakeTags (cookedArgs *args, void *user CTAGS_ATTR_UNUSED)
 {
 	clock_t timeStamps [3];
 	bool resize = false;
@@ -345,7 +350,7 @@ static void batchMakeTags (cookedArgs *args, void *user CTAGS_ATTR_UNUSED)
 			error (FATAL, "No files specified. Try \"%s --help\".",
 				getExecutableName ());
 		else if (! Option.recurse && ! etagsInclude ())
-			return;
+			return NULL;
 	}
 
 #define timeStamp(n) timeStamps[(n)]=(Option.printTotals ? clock():(clock_t)0)
@@ -374,8 +379,9 @@ static void batchMakeTags (cookedArgs *args, void *user CTAGS_ATTR_UNUSED)
 
 	timeStamp (1);
 
+	char* output = NULL;
 	if ((! Option.filter) && (!Option.printLanguage))
-		closeTagFile (resize);
+		output = closeTagFile (resize);
 
 	timeStamp (2);
 
@@ -386,6 +392,8 @@ static void batchMakeTags (cookedArgs *args, void *user CTAGS_ATTR_UNUSED)
 			for (unsigned int i = 0; i < countParsers(); i++)
 				printParserStatisticsIfUsed (i);
 	}
+
+	return output;
 
 #undef timeStamp
 }
@@ -548,7 +556,69 @@ static void sanitizeEnviron (void)
  *		Start up code
  */
 
-extern int ctags_cli_main (int argc CTAGS_ATTR_UNUSED, char **argv)
+
+extern int ctags_cli_main(int argc CTAGS_ATTR_UNUSED, char** argv)
+{
+	cookedArgs* args;
+
+#if defined(WIN32) && defined(HAVE_MKSTEMP)
+	/* MinGW-w64's mkstemp() uses rand() for generating temporary files. */
+	srand((unsigned int)clock());
+#endif
+
+	initDefaultTrashBox();
+
+	DEBUG_INIT();
+
+	setErrorPrinter(stderrDefaultErrorPrinter, NULL);
+	setMainLoop(batchMakeTags, NULL);
+	setTagWriter(WRITER_U_CTAGS, NULL);
+
+	setCurrentDirectory();
+	setExecutableName(*argv++);
+	sanitizeEnviron();
+	checkRegex();
+	initFieldObjects();
+	initXtagObjects();
+
+	args = cArgNewFromArgv(argv);
+	previewFirstOption(args);
+	initializeParsing();
+	testEtagsInvocation();
+	initOptions();
+	initRegexOptscript();
+	readOptionConfiguration();
+	verbose("Reading initial options from command line\n");
+	parseCmdlineOptions(args);
+	checkOptions();
+
+	runMainLoop(args);
+
+	/*  Clean up.
+	 */
+	cArgDelete(args);
+
+	freeKeywordTable();
+	freeRoutineResources();
+	freeInputFileResources();
+	freeTagFileResources();
+	freeOptionResources();
+	freeParserResources();
+	freeRegexResources();
+#ifdef HAVE_ICONV
+	freeEncodingResources();
+#endif
+
+	finiDefaultTrashBox();
+
+	if (Option.printLanguage)
+		return (Option.printLanguage == true) ? 0 : 1;
+
+	exit(0);
+	return 0;
+}
+
+extern char* ctags_cli_lib(int argc CTAGS_ATTR_UNUSED, char **argv)
 {
 	cookedArgs *args;
 
@@ -583,11 +653,12 @@ extern int ctags_cli_main (int argc CTAGS_ATTR_UNUSED, char **argv)
 	parseCmdlineOptions (args);
 	checkOptions ();
 
-	runMainLoop (args);
+	char* output = runMainLoop (args);
 
 	/*  Clean up.
 	 */
 	cArgDelete (args);
+
 	freeKeywordTable ();
 	freeRoutineResources ();
 	freeInputFileResources ();
@@ -604,6 +675,5 @@ extern int ctags_cli_main (int argc CTAGS_ATTR_UNUSED, char **argv)
 	if (Option.printLanguage)
 		return (Option.printLanguage == true)? 0: 1;
 
-	exit (0);
-	return 0;
+	return output;
 }

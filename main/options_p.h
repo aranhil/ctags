@@ -120,7 +120,7 @@ typedef struct sOptionValues {
 
 } optionValues;
 
-typedef void (* mainLoopFunc) (cookedArgs *args, void *data);
+typedef char* (* mainLoopFunc) (cookedArgs *args, void *data);
 
 /*
 *   GLOBAL VARIABLES

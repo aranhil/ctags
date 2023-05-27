@@ -26,7 +26,7 @@ extern void catFile (MIO *mio);
 #ifdef EXTERNAL_SORT
 extern void externalSortTags (const bool toStdout, MIO *tagFile);
 #else
-extern void internalSortTags (const bool toStdout,
+extern char* internalSortTags (const bool toStdout,
 			      MIO *mio,
 			      size_t numTags);
 #endif
